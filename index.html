@@ -186,7 +186,7 @@ const UNITS={
 
 // ================== 저장 ==================
 const KEY='haein-letsgo-v2'; // v1(테스트 기록)은 쓰지 않음 → 별·스티커 0부터
-const CFG0={n:8,rate:0.85,pass:0.75,mic:'auto'};
+const CFG0={n:8,rate:0.85,pass:0.75,mic:'auto',wait:4};
 let save={stars:0,units:[1,2,3,4,5,6],log:[],miss:{},cfg:{...CFG0}};
 try{localStorage.removeItem('haein-letsgo-v1');const s=JSON.parse(localStorage.getItem(KEY));if(s)save=Object.assign(save,s);save.cfg=Object.assign({...CFG0},save.cfg||{});}catch(e){}
 function miss(key){const m=save.miss[key]||{c:0};m.c++;m.t=Date.now();save.miss[key]=m;
@@ -208,14 +208,41 @@ function popStar(e='⭐'){const p=document.getElementById('pop');p.textContent=e
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 let inFrame=true;try{inFrame=window.self!==window.top;}catch(e){}
 let micOK=!!SR && (location.protocol==='file:' || !inFrame) && save.cfg.mic!=='off';
-function listen(){return new Promise((res,rej)=>{
+// 천천히 말해도 끊기지 않게: 계속 듣다가 '말이 멈춘 뒤 N초' 지나면 끝. 마이크를 한 번 더 누르면 바로 끝.
+let curRec=null;
+function listen(onPart){return new Promise((res,rej)=>{
  let r;try{r=new SR();}catch(e){rej('x');return;}
- r.lang='en-US';r.interimResults=false;r.maxAlternatives=5;let done=false;
- r.onresult=e=>{done=true;const alts=[];for(const x of e.results[0])alts.push(x.transcript);res(alts);};
- r.onerror=e=>{done=true;rej(e.error||'x');};
- r.onend=()=>{if(!done)res([]);};
- try{r.start();}catch(e){rej('x');}
- setTimeout(()=>{try{r.stop();}catch(e){}},7000);
+ r.lang='en-US';r.continuous=true;r.interimResults=true;r.maxAlternatives=5;
+ const WAIT=(+save.cfg.wait||4)*1000,FIRST=12000,MAX=30000,t0=Date.now();
+ let segs=[],base=0,interim='',heard=false,last=t0,stopping=false,ended=false,timer=null;
+ const best=()=>{const a=segs.filter(Boolean).map(s=>s[0]).filter(Boolean);const o=[];
+  for(const s of a){const p=o[o.length-1];if(p&&s.toLowerCase().startsWith(p.toLowerCase()))o[o.length-1]=s;else o.push(s);}return o;};
+ const textNow=()=>(best().join(' ')+' '+interim).trim();
+ const done=()=>{if(ended)return;ended=true;clearInterval(timer);curRec=null;
+  const S=segs.filter(Boolean),n=Math.max(1,...S.map(s=>s.length)),alts=[];
+  for(let j=0;j<n;j++){const o=[];for(const s of S){const t=s[Math.min(j,s.length-1)];const p=o[o.length-1];
+    if(p&&t.toLowerCase().startsWith(p.toLowerCase()))o[o.length-1]=t;else if(t)o.push(t);}
+   const t=(o.join(' ')+' '+interim).trim();if(t&&!alts.includes(t))alts.push(t);}
+  res(alts);};
+ const stop=()=>{if(stopping)return;stopping=true;try{r.stop();}catch(e){}setTimeout(done,1500);};
+ curRec={stop};
+ r.onresult=e=>{interim='';
+  for(let i=e.resultIndex;i<e.results.length;i++){const x=e.results[i];
+   if(x.isFinal){const a=[];for(const y of x)a.push(y.transcript.trim());segs[base+i]=a;}
+   else interim+=' '+x[0].transcript;}
+  interim=interim.trim();
+  if(textNow()){heard=true;last=Date.now();}
+  if(onPart)onPart(textNow());};
+ r.onerror=e=>{const er=e.error||'x';if(er==='no-speech'||er==='aborted')return;
+  if(['not-allowed','service-not-allowed','audio-capture','network'].includes(er)){ended=true;clearInterval(timer);curRec=null;rej(er);}};
+ r.onend=()=>{if(ended)return;
+  if(!stopping&&Date.now()-t0<MAX){ // 브라우저가 혼자 끊으면 이어서 다시 듣기
+   if(interim){segs.push([interim]);interim='';}base=segs.length;
+   try{r.start();return;}catch(e){}}
+  done();};
+ timer=setInterval(()=>{const now=Date.now();
+  if((!heard&&now-t0>FIRST)||(heard&&now-last>WAIT)||now-t0>MAX)stop();},200);
+ try{r.start();}catch(e){clearInterval(timer);curRec=null;rej('x');}
 });}
 const NUM={zero:'0',one:'1',two:'2',three:'3',four:'4',five:'5',six:'6',seven:'7',eight:'8',nine:'9',ten:'10'};
 function norm(s){
@@ -367,10 +394,10 @@ function showModel(){const c=G.cur;$('#model').classList.remove('hide');$('#mode
  speak(c.it.a);$('#fb').textContent='해인이가 말한 거랑 같았나요?';
  $('#selfRow').innerHTML=`<button class="big gray" onclick="speak(G.cur.it.a)">🔊 다시 듣기</button><button class="big gray" onclick="renderSay()">🔁 다시 말하기</button><button class="big green" onclick="selfOK()">👍 똑같이 말했어요</button>`;}
 function selfOK(){right(G.cur.hint?1:2);setTimeout(next,600);}
-async function recSay(){const c=G.cur;if(c.busy||c.done)return;c.busy=true;
+async function recSay(){const c=G.cur;if(c.busy&&curRec){curRec.stop();$('#tip').textContent='잠깐만요…';return;}if(c.busy||c.done)return;c.busy=true;
  try{speechSynthesis.cancel();}catch(e){}
- $('#mic').classList.add('rec');$('#tip').textContent='듣고 있어요… 말해 봐요!';
- let alts;try{alts=await listen();}catch(err){c.busy=false;$('#mic').classList.remove('rec');
+ $('#mic').classList.add('rec');$('#tip').textContent='듣고 있어요… 천천히 말해도 괜찮아요. 다 말하면 🎤 한 번 더 눌러요';
+ let alts;try{alts=await listen(t=>{const h=$('#heard');if(h)h.innerHTML=`<div class="kosub">🎤 ${t.replace(/</g,'')} …</div>`;});}catch(err){c.busy=false;$('#mic').classList.remove('rec');
   if(['not-allowed','service-not-allowed','audio-capture','network','x'].includes(err)){micOK=false;drawSay();$('#fb').textContent=err==='network'?'인터넷이 필요해요. 오늘은 따라 말하기로 해요!':'마이크를 쓸 수 없어서 따라 말하기로 바꿨어요.';}
   else{$('#tip').textContent='잘 안 들렸어요. 다시 눌러 볼까요?';}return;}
  c.busy=false;$('#mic').classList.remove('rec');$('#tip').textContent='마이크를 누르고 대답해요';
@@ -405,8 +432,8 @@ function ansTalk(i){const c=G.cur;if(c.done)return;const el=$('#o'+i);
   <div class="row">${micOK?'<button class="big" onclick="talkMic()">🎤 말하기 (보너스 ⭐)</button>':''}<button class="big gray" onclick="speak(G.cur.it.a)">🔊 다시 듣기</button><button class="big green" onclick="next()">다음 ▶</button></div><div class="heard" id="heard"></div>`;
  }else{if(!c.tries)miss('대화|'+c.it.q+' → '+c.it.a);c.tries++;el.classList.add('wrong');el.disabled=true;tone(false);}
 }
-async function talkMic(){const c=G.cur;if(c.bonus||c.busy)return;c.busy=true;$('#heard').textContent='듣고 있어요… 🎤';
- try{const alts=await listen();const s=score(c.it.a,alts);
+async function talkMic(){const c=G.cur;if(c.busy&&curRec){curRec.stop();return;}if(c.bonus||c.busy)return;c.busy=true;$('#heard').textContent='듣고 있어요… 천천히 말해도 돼요. 다 말하면 🎤 버튼을 한 번 더 눌러요';
+ try{const alts=await listen(t=>{const h=$('#heard');if(h)h.innerHTML=`<div class="kosub">🎤 ${t.replace(/</g,'')} …</div>`;});const s=score(c.it.a,alts);
   $('#heard').innerHTML=alts.length?markWords(c.it.a,s.hit):'잘 안 들렸어요. 다시 눌러 봐요!';
   if(s.r>=save.cfg.pass){c.bonus=true;G.earned++;addStar(1);tone(true);popStar('🌟');}
  }catch(e){micOK=false;$('#heard').textContent='마이크를 쓸 수 없어요. 소리 내어 말하고 다음으로!';}
@@ -456,7 +483,7 @@ function teacherLock(){
 function unlock(){const i=$('#lk');if(+i.value===lockAns)teacher();else{i.value='';i.style.borderColor='#E06060';}}
 function fmtD(t){const d=new Date(t);return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}
 function sel(id,opts,cur){return `<select id="${id}" onchange="setCfg()" style="font:inherit;font-size:16px;padding:6px 10px;border:2px solid var(--line);border-radius:10px;background:#fff">${opts.map(([v,l])=>`<option value="${v}" ${String(v)===String(cur)?'selected':''}>${l}</option>`).join('')}</select>`;}
-function setCfg(){const c=save.cfg;c.n=+$('#cN').value;c.rate=+$('#cR').value;c.pass=+$('#cP').value;c.mic=$('#cM').value;persist();
+function setCfg(){const c=save.cfg;c.n=+$('#cN').value;c.rate=+$('#cR').value;c.pass=+$('#cP').value;c.mic=$('#cM').value;c.wait=+$('#cW').value;persist();
  micOK=!!SR&&(location.protocol==='file:'||!inFrame)&&c.mic!=='off';const m=$('#saved');if(m){m.textContent='저장했어요 ✔';setTimeout(()=>{m.textContent='';},1500);}}
 function giveStar(n){save.stars=Math.max(0,save.stars+n);persist();teacher();}
 const RESETS={
@@ -488,6 +515,7 @@ function teacher(){
   <div>한 판 문제 수</div><div>${sel('cN',[[5,'5문제'],[8,'8문제'],[10,'10문제'],[12,'12문제']],save.cfg.n)}</div>
   <div>영어 읽어 주는 속도</div><div>${sel('cR',[[0.7,'천천히'],[0.85,'보통'],[1,'빠르게']],save.cfg.rate)} <button class="spk" style="margin:0 0 0 6px" onclick="speak('Where is the cat? It is behind the sofa.')">🔊 들어 보기</button></div>
   <div>말하기 채점</div><div>${sel('cP',[[0.6,'너그럽게 (60%)'],[0.75,'보통 (75%)'],[1,'정확하게 (100%)']],save.cfg.pass)}</div>
+  <div>말 멈추면 기다리는 시간</div><div>${sel('cW',[[2.5,'짧게 (2.5초)'],[4,'천천히 (4초)'],[6,'아주 천천히 (6초)']],save.cfg.wait)}</div>
   <div>마이크</div><div>${sel('cM',[['auto','자동 (되면 쓰기)'],['off','끄기 (따라 말하기 모드)']],save.cfg.mic)} <span class="kosub" style="font-size:13px">지금: ${micOK?'마이크 채점':'따라 말하기'}</span></div></div>
   <div class="kosub" style="font-size:13px;margin-top:10px">말하기 채점은 It's = It is, isn't = is not처럼 줄임말과 풀어 쓴 말을 같게 봐요. a / the는 빠져도 괜찮아요.</div>`)}
  ${box('⭐ 별 주기 · 빼기',`<div class="row" style="justify-content:flex-start;margin-top:0"><button class="big green" onclick="giveStar(1)">+1</button><button class="big green" onclick="giveStar(5)">+5</button><button class="big green" onclick="giveStar(10)">+10 (스티커 1개)</button><button class="big gray" onclick="giveStar(-1)">−1</button></div><div class="kosub" style="font-size:13px;margin-top:8px">수업 시간 보상이나 숙제 칭찬으로 써요.</div>`)}
