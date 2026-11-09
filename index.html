@@ -121,6 +121,7 @@ const S=(fn,e,pos)=>({svg:scene(fn,e,pos)});
 const FU=n=>({svg:furn(n)});
 
 // ================== 교재 내용 (Let's Go 2 · Unit 1~6) ==================
+const ALLU=()=>Object.keys(UNITS).map(Number);
 const UNITS={
 1:{ko:'교실 물건',
  words:[['a clock','🕰️','시계'],['a door','🚪','문'],['a window','🪟','창문'],['a calendar','📅','달력'],['a camera','📷','카메라'],['an umbrella','☂️','우산'],['a picture','🖼️','그림'],['a computer','💻','컴퓨터']],
@@ -181,14 +182,25 @@ const UNITS={
   {q:"Where's the dog?",qk:'강아지는 어디 있어?',a:"It's next to the TV.",ak:'TV 옆에 있어.',p:S('tv','🐶','next')},
   {q:'Is there a ball in front of the TV?',qk:'TV 앞에 공이 있어?',a:'Yes, there is.',ak:'응, 있어.',p:S('tv','⚽','front')},
   {q:'Is there a cat next to the sofa?',qk:'소파 옆에 고양이가 있어?',a:"No, there isn't.",ak:'아니, 없어.',p:S('sofa','🐱','behind')}],
- act:[['Wash the dishes.','🍽️🧽','접시를 닦아요'],['Take a bath.','🛁','목욕을 해요'],['Clean the room.','🧹','방을 청소해요'],['Make the bed.','🛏️✨','이불을 정리해요']]}
+ act:[['Wash the dishes.','🍽️🧽','접시를 닦아요'],['Take a bath.','🛁','목욕을 해요'],['Clean the room.','🧹','방을 청소해요'],['Make the bed.','🛏️✨','이불을 정리해요']]},
+7:{ko:'하루 일과',
+ words:[['get up','🥱🛏️','일어나다'],['brush my teeth','🪥🦷','이를 닦다'],['wash my face','🧼💦','세수하다'],['comb my hair','👧🪮','머리를 빗다'],['get dressed','👕👖','옷을 입다'],['eat breakfast','🥣🍳','아침을 먹다']],
+ talk:[
+  {q:'What time is it?',qk:'몇 시야?',a:"It's seven o'clock.",ak:'7시야.',p:'🕖'},
+  {q:'What time is it?',qk:'몇 시야?',a:"It's six o'clock. It's time for dinner.",ak:'6시야. 저녁 먹을 시간이야.',p:'🕕🍝'},
+  {q:'Is it time for bed?',qk:'잘 시간이야?',a:'Yes, it is. Good night!',ak:'응, 맞아. 잘 자!',p:'🕘🛏️'},
+  {q:'What do you do in the morning?',qk:'너는 아침에 뭐 해?',a:'I brush my teeth.',ak:'나는 이를 닦아.',p:'☀️🪥'},
+  {q:'What do you do in the morning?',qk:'너는 아침에 뭐 해?',a:'I eat breakfast.',ak:'나는 아침을 먹어.',p:'☀️🥣'},
+  {q:'Do you wash your face in the morning?',qk:'너는 아침에 세수해?',a:'Yes, I do.',ak:'응, 해.',p:'☀️🧼💦'},
+  {q:'Do you get up in the afternoon?',qk:'너는 오후에 일어나?',a:"No, I don't.",ak:'아니, 안 그래.',p:'🌤️🥱❌'}],
+ act:[['Get up.','🥱🛏️','일어나요'],['Brush your teeth.','🪥🦷','이를 닦아요'],['Wash your face.','🧼💦','세수해요'],['Comb your hair.','👧🪮','머리를 빗어요'],['Get dressed.','👕👖','옷을 입어요']]}
 };
 
 // ================== 저장 ==================
 const KEY='haein-letsgo-v2'; // v1(테스트 기록)은 쓰지 않음 → 별·스티커 0부터
 const CFG0={n:8,rate:0.85,pass:0.75,mic:'auto',wait:4};
-let save={stars:0,units:[1,2,3,4,5,6],log:[],miss:{},cfg:{...CFG0}};
-try{localStorage.removeItem('haein-letsgo-v1');const s=JSON.parse(localStorage.getItem(KEY));if(s)save=Object.assign(save,s);save.cfg=Object.assign({...CFG0},save.cfg||{});}catch(e){}
+let save={stars:0,units:ALLU(),log:[],miss:{},cfg:{...CFG0}};
+try{localStorage.removeItem('haein-letsgo-v1');const s=JSON.parse(localStorage.getItem(KEY));if(s)save=Object.assign(save,s);if(!save.add7){if(!save.units.includes(7))save.units.push(7);save.add7=1;}save.cfg=Object.assign({...CFG0},save.cfg||{});}catch(e){}
 function miss(key){const m=save.miss[key]||{c:0};m.c++;m.t=Date.now();save.miss[key]=m;
  const p=key.split('|');const k=p[0]==='말하기'?p[0]+'|'+p[1]:key;save.missLog=save.missLog||[];save.missLog.push({t:m.t,k,h:p[0]==='말하기'?(p[2]||''):''});if(save.missLog.length>600)save.missLog=save.missLog.slice(-600);persist();}
 function persist(){try{localStorage.setItem(KEY,JSON.stringify(save));}catch(e){}}
@@ -244,11 +256,11 @@ function listen(onPart){return new Promise((res,rej)=>{
   if((!heard&&now-t0>FIRST)||(heard&&now-last>WAIT)||now-t0>MAX)stop();},200);
  try{r.start();}catch(e){clearInterval(timer);curRec=null;rej('x');}
 });}
-const NUM={zero:'0',one:'1',two:'2',three:'3',four:'4',five:'5',six:'6',seven:'7',eight:'8',nine:'9',ten:'10'};
+const NUM={zero:'0',one:'1',two:'2',three:'3',four:'4',five:'5',six:'6',seven:'7',eight:'8',nine:'9',ten:'10',eleven:'11',twelve:'12'};
 function norm(s){
  s=' '+s.toLowerCase().replace(/[’‘`]/g,"'")+' ';
  // 축약형·풀어 쓴 형태·아포스트로피 빠진 형태를 모두 같은 말로 봐요 (It's = It is = Its)
- const C=[[/\bwhat'?s\b/g,'what is'],[/\bit'?s\b/g,'it is'],[/\bi'?m\b/g,'i am'],[/\bhe'?s\b/g,'he is'],[/\bshe'?s\b/g,'she is'],[/\bthey'?re\b/g,'they are'],[/\bwe'?re\b/g,'we are'],[/\byou'?re\b/g,'you are'],[/\bisn'?t\b/g,'is not'],[/\baren'?t\b/g,'are not'],[/\bcan'?t\b/g,'can not'],[/\bcannot\b/g,'can not'],[/\bdoesn'?t\b/g,'does not'],[/\bdon'?t\b/g,'do not'],[/\bthere'?s\b/g,'there is'],[/\bwhere'?s\b/g,'where is'],[/\bwho'?s\b/g,'who is'],[/\bthat'?s\b/g,'that is'],[/\bscott'?s\b/g,'scott'],[/\bok\b|\bo\.k\.|\bokay\b/g,'okay'],[/\byoyo\b|\byo yo\b/g,'yo-yo'],[/\bt\.?v\.?\b/g,'tv']];
+ const C=[[/\bwhat'?s\b/g,'what is'],[/\bit'?s\b/g,'it is'],[/\bi'?m\b/g,'i am'],[/\bhe'?s\b/g,'he is'],[/\bshe'?s\b/g,'she is'],[/\bthey'?re\b/g,'they are'],[/\bwe'?re\b/g,'we are'],[/\byou'?re\b/g,'you are'],[/\bisn'?t\b/g,'is not'],[/\baren'?t\b/g,'are not'],[/\bcan'?t\b/g,'can not'],[/\bcannot\b/g,'can not'],[/\bdoesn'?t\b/g,'does not'],[/\bdon'?t\b/g,'do not'],[/\bthere'?s\b/g,'there is'],[/\bwhere'?s\b/g,'where is'],[/\bwho'?s\b/g,'who is'],[/\bthat'?s\b/g,'that is'],[/\bscott'?s\b/g,'scott'],[/\bok\b|\bo\.k\.|\bokay\b/g,'okay'],[/\byoyo\b|\byo yo\b/g,'yo-yo'],[/\bt\.?v\.?\b/g,'tv'],[/\b(\d{1,2}):00\b/g,"$1 o'clock"],[/\bo'? ?clock\b/g,'oclock']];
  for(const[a,b]of C)s=s.replace(a,b);
  return s.replace(/[^a-z0-9\- ]/g,' ').split(/\s+/).filter(Boolean).map(w=>NUM[w]||w).filter(w=>!['a','an','the','uh','um'].includes(w));
 }
@@ -285,7 +297,7 @@ const GAMES=[
 ];
 function home(){
  G=null;try{if(location.hash)history.replaceState(null,'',location.pathname+location.search);}catch(e){}try{speechSynthesis.cancel();}catch(e){}
- R(topBar()+`<h2>📚 어떤 Unit을 할까요?</h2><div class="units">${[1,2,3,4,5,6].map(u=>`<button class="chip ${save.units.includes(u)?'on':''}" onclick="togU(${u})">Unit ${u} <span class="ko">${UNITS[u].ko}</span></button>`).join('')}</div>
+ R(topBar()+`<h2>📚 어떤 Unit을 할까요?</h2><div class="units">${ALLU().map(u=>`<button class="chip ${save.units.includes(u)?'on':''}" onclick="togU(${u})">Unit ${u} <span class="ko">${UNITS[u].ko}</span></button>`).join('')}</div>
  <h2>🎮 게임을 골라요</h2><div class="games">${GAMES.map(g=>`<button class="game" onclick="start('${g.id}')"><div class="em" style="background:${g.bg}">${g.em}</div><div><b>${g.t}</b><span>${g.k}</span></div></button>`).join('')}</div>
  <div class="row" style="margin-top:18px"><button class="big blue" onclick="report()">📤 선생님께 기록 보내기</button></div>
  <div class="note">🎤 말하기 채점: ${micOK?'<span class="status on">마이크 사용 가능</span> 크롬에서 마이크 허용을 누르면 해인이 목소리를 듣고 채점해요.':'<span class="status off">따라 말하기 모드</span> 이 화면에서는 마이크를 쓸 수 없어서, 듣고 말한 뒤 스스로 👍 확인해요. 컴퓨터 크롬에서 파일로 열면 마이크 채점이 돼요.'}<br>🔊 소리가 안 나면 기기 소리를 켜 주세요. 한 판은 ${save.cfg.n}문제예요.</div>
@@ -417,7 +429,7 @@ async function recSay(){const c=G.cur;if(c.busy&&curRec){curRec.stop();$('#tip')
 // ================== 4. Talk Time ==================
 function talkGame(){newGame('talk',pick(pool('talk'),save.cfg.n));G.render=renderTalk;renderTalk();}
 function renderTalk(){
- const it=G.items[G.i];const all=[];for(const u of [1,2,3,4,5,6])for(const x of UNITS[u].talk)all.push(x);
+ const it=G.items[G.i];const all=[];for(const u of ALLU())for(const x of UNITS[u].talk)all.push(x);
  const wrong=pick(all.filter(x=>x.a!==it.a&&norm(x.a).join()!==norm(it.a).join()),2);
  const opts=shuf([it,...wrong]);G.cur={it,opts,tries:0};
  R(topBar(true)+`<div class="play"><div class="qtitle ko">질문에 알맞은 대답을 골라요</div>${picHTML(it.p,'sm')}
@@ -489,7 +501,7 @@ function giveStar(n){save.stars=Math.max(0,save.stars+n);persist();teacher();}
 const RESETS={
  r1:()=>{save.stars=0;persist();},
  r2:()=>{save.log=[];save.miss={};save.missLog=[];save.lastSent=0;persist();},
- r3:()=>{save={stars:0,units:[1,2,3,4,5,6],log:[],miss:{},cfg:{...CFG0}};persist();micOK=!!SR&&(location.protocol==='file:'||!inFrame);}
+ r3:()=>{save={stars:0,units:ALLU(),log:[],miss:{},cfg:{...CFG0}};persist();micOK=!!SR&&(location.protocol==='file:'||!inFrame);}
 };
 let armed=null;
 function danger(id,label){return `<button class="big gray" id="${id}" onclick="arm('${id}')">${label}</button>`;}
@@ -520,7 +532,7 @@ function teacher(){
   <div class="kosub" style="font-size:13px;margin-top:10px">말하기 채점은 It's = It is, isn't = is not처럼 줄임말과 풀어 쓴 말을 같게 봐요. a / the는 빠져도 괜찮아요.</div>`)}
  ${box('⭐ 별 주기 · 빼기',`<div class="row" style="justify-content:flex-start;margin-top:0"><button class="big green" onclick="giveStar(1)">+1</button><button class="big green" onclick="giveStar(5)">+5</button><button class="big green" onclick="giveStar(10)">+10 (스티커 1개)</button><button class="big gray" onclick="giveStar(-1)">−1</button></div><div class="kosub" style="font-size:13px;margin-top:8px">수업 시간 보상이나 숙제 칭찬으로 써요.</div>`)}
  ${box('🧹 초기화',`<div class="row" style="justify-content:flex-start;margin-top:0">${danger('r1','별·스티커 0으로')}${danger('r2','기록·틀린 문제 지우기')}${danger('r3','전부 처음처럼')}</div><div class="kosub" style="font-size:13px;margin-top:8px">버튼을 두 번 눌러야 지워져요. 지운 건 되돌릴 수 없어요.</div>`)}
- ${box('📚 게임에 들어 있는 교재 내용',[1,2,3,4,5,6].map(u=>{const U=UNITS[u];return `<details style="margin-bottom:8px"><summary style="cursor:pointer;font-size:17px">Unit ${u} <span class="ko" style="color:var(--mute)">${U.ko} · 단어 ${U.words.length} · 대화 ${U.talk.length} · 동작 ${U.act.length}</span></summary>
+ ${box('📚 게임에 들어 있는 교재 내용',ALLU().map(u=>{const U=UNITS[u];return `<details style="margin-bottom:8px"><summary style="cursor:pointer;font-size:17px">Unit ${u} <span class="ko" style="color:var(--mute)">${U.ko} · 단어 ${U.words.length} · 대화 ${U.talk.length} · 동작 ${U.act.length}</span></summary>
   <div style="font-size:15px;line-height:1.7;padding:6px 4px 4px 16px"><div><b class="ko">단어</b> ${U.words.map(w=>w[0]).join(' · ')}</div>
   <div style="margin-top:4px"><b class="ko">대화</b>${U.talk.map(t=>`<div>• ${t.q} → <span style="color:var(--pink)">${t.a}</span></div>`).join('')}</div>
   <div style="margin-top:4px"><b class="ko">동작</b> ${U.act.map(a=>a[0]).join(' · ')}</div></div></details>`;}).join(''))}
